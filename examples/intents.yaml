@@ -1,0 +1,27 @@
+---
+intents:
+  - name: My name is @name
+    usersays:
+      - Hi, my name is @name:John
+    responses:
+      - Hi $name, how are you doing?
+    followup:
+      - name: I am good
+        usersays:
+          - I am good
+          - Not too bad
+        responses:
+          - Great
+      - name: Not good
+        usersays:
+          - I am not good
+          - Not good
+          - Bad
+        responses:
+          - Sorry to hear that.
+
+  - name: How are you?
+    usersays:
+      - How are you?
+    responses:
+      - I'm great, thanks.

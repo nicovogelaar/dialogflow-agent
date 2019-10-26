@@ -1,0 +1,15 @@
+---
+entities:
+  - type: name
+    values:
+      - '@sys.person:person'
+      - '@sys.given-name:given-name'
+      - John
+  - type: location
+    values:
+      - '@sys.geo-country:geo-country'
+      - '@sys.geo-city:geo-city'
+  - type: colour
+    values:
+      - '@sys.color:color'
+      - Sky blue
