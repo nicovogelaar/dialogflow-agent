@@ -47,7 +47,7 @@ func (client *IntentsClient) ListIntents() ([]Intent, error) {
 		if err != nil {
 			return nil, err
 		}
-		intents = append(intents, toIntent(intent))
+		intents = append(intents, dialogflowIntentToIntent(intent))
 	}
 
 	return intents, nil
@@ -76,7 +76,7 @@ func (client *IntentsClient) CreateIntent(intent Intent) (Intent, error) {
 		return Intent{}, err
 	}
 
-	return toIntent(dialogflowIntent), nil
+	return dialogflowIntentToIntent(dialogflowIntent), nil
 }
 
 func (client *IntentsClient) CreateFollowupIntent(intent Intent, parentFollowupIntent Intent) (Intent, error) {
@@ -123,7 +123,7 @@ func (client *IntentsClient) Close() error {
 	return client.intentsClient.Close()
 }
 
-func toIntent(dialogflowIntent *dialogflowpb.Intent) Intent {
+func dialogflowIntentToIntent(dialogflowIntent *dialogflowpb.Intent) Intent {
 	return Intent{
 		Name:                     dialogflowIntent.Name,
 		DisplayName:              dialogflowIntent.DisplayName,

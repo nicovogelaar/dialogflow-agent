@@ -40,14 +40,14 @@ func (client *EntityTypesClient) ListEntityTypes() ([]EntityType, error) {
 
 	var entityTypes []EntityType
 	for {
-		intent, err := iter.Next()
+		entityType, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
 			return nil, err
 		}
-		entityTypes = append(entityTypes, toEntityType(intent))
+		entityTypes = append(entityTypes, dialogflowEntityTypeToEntityType(entityType))
 	}
 
 	return entityTypes, nil
@@ -64,7 +64,7 @@ func (client *EntityTypesClient) GetEntityType(entityTypeID string) (EntityType,
 		return EntityType{}, err
 	}
 
-	return toEntityType(entityType), nil
+	return dialogflowEntityTypeToEntityType(entityType), nil
 }
 
 func (client *EntityTypesClient) CreateEntityType(entityType EntityType) (EntityType, error) {
@@ -106,7 +106,7 @@ func (client *EntityTypesClient) CreateEntityType(entityType EntityType) (Entity
 		return EntityType{}, err
 	}
 
-	return toEntityType(dialogflowEntityType), nil
+	return dialogflowEntityTypeToEntityType(dialogflowEntityType), nil
 }
 
 func (client *EntityTypesClient) DeleteEntityType(entityTypeID string) error {
@@ -144,7 +144,7 @@ func (client *EntityTypesClient) Close() error {
 	return client.entityTypesClient.Close()
 }
 
-func toEntityType(dialogflowEntityType *dialogflowpb.EntityType) EntityType {
+func dialogflowEntityTypeToEntityType(dialogflowEntityType *dialogflowpb.EntityType) EntityType {
 	var entities []Entity
 	for _, entity := range dialogflowEntityType.Entities {
 		entities = append(entities, Entity{

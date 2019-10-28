@@ -10,8 +10,8 @@ import (
 )
 
 type SessionsClient struct {
-	projectID string
-	*dialogflow.SessionsClient
+	projectID      string
+	sessionsClient *dialogflow.SessionsClient
 }
 
 func NewSessionsClient(projectID, credentialsFile string) (*SessionsClient, error) {
@@ -22,7 +22,7 @@ func NewSessionsClient(projectID, credentialsFile string) (*SessionsClient, erro
 		return nil, fmt.Errorf("failed to create sessions client: %v", err)
 	}
 
-	return &SessionsClient{projectID: projectID, SessionsClient: sessionClient}, nil
+	return &SessionsClient{projectID: projectID, sessionsClient: sessionClient}, nil
 }
 
 func (client *SessionsClient) DetectIntentText(sessionID, text, languageCode string) (string, error) {
@@ -34,7 +34,7 @@ func (client *SessionsClient) DetectIntentText(sessionID, text, languageCode str
 	queryInput := dialogflowpb.QueryInput{Input: &queryTextInput}
 	request := dialogflowpb.DetectIntentRequest{Session: sessionPath, QueryInput: &queryInput}
 
-	response, err := client.SessionsClient.DetectIntent(ctx, &request)
+	response, err := client.sessionsClient.DetectIntent(ctx, &request)
 	if err != nil {
 		return "", fmt.Errorf("failed to detect intent client: %v", err)
 	}
@@ -45,5 +45,5 @@ func (client *SessionsClient) DetectIntentText(sessionID, text, languageCode str
 }
 
 func (client *SessionsClient) Close() error {
-	return client.SessionsClient.Close()
+	return client.sessionsClient.Close()
 }
