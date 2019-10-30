@@ -3,8 +3,6 @@ package dialogflow
 import (
 	"reflect"
 	"testing"
-
-	"github.com/nicovogelaar/dialogflow-agent/dialogflow"
 )
 
 func TestParseTrainingPhraseParts(t *testing.T) {
@@ -12,7 +10,7 @@ func TestParseTrainingPhraseParts(t *testing.T) {
 
 	parts := parseTrainingPhrase(trainingPhrase)
 
-	expected := []dialogflow.TrainingPhrasePart{
+	expected := []TrainingPhrasePart{
 		{
 			Text: "Lorem ipsum ",
 		},

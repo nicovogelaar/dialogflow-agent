@@ -24,14 +24,15 @@ var (
 				}
 			}()
 
-			var intentsImporter dialogflow.IntentsImporter
+			var source dialogflow.Source
 			if intentsImportURL != "" {
-				intentsImporter = dialogflow.NewURLIntentsImporter(intentsClient, intentsImportURL)
+				source = dialogflow.NewURLSource(intentsImportURL)
 			} else {
-				intentsImporter = dialogflow.NewFileIntentsImporter(intentsClient, intentsImportFilename)
+				source = dialogflow.NewFileSource(intentsImportFilename)
 			}
 
-			if err = intentsImporter.ImportIntents(); err != nil {
+			importer := dialogflow.NewIntentsImporter(intentsClient, source)
+			if err = importer.ImportIntents(); err != nil {
 				log.Fatal(err)
 			}
 		},

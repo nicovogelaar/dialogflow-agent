@@ -3,7 +3,6 @@ package dialogflow
 import (
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"regexp"
 
 	"github.com/ghodss/yaml"
@@ -13,26 +12,31 @@ type IntentsImporter interface {
 	ImportIntents() error
 }
 
-type fileIntentsImporter struct {
+type intentsImporter struct {
 	intentsClient *IntentsClient
-	filename      string
+	source        Source
 }
 
-func NewFileIntentsImporter(intentsClient *IntentsClient, filename string) IntentsImporter {
-	return &fileIntentsImporter{
+func NewIntentsImporter(intentsClient *IntentsClient, source Source) IntentsImporter {
+	return &intentsImporter{
 		intentsClient: intentsClient,
-		filename:      filename,
+		source:        source,
 	}
 }
 
-func (importer *fileIntentsImporter) ImportIntents() error {
-	intents, err := readIntentsFromFile(importer.filename)
+func (importer *intentsImporter) ImportIntents() error {
+	data, err := ioutil.ReadAll(importer.source)
 	if err != nil {
-		return fmt.Errorf("read intents from file: %v", err)
+		return fmt.Errorf("read data: %v", err)
+	}
+
+	intents, err := readIntents(data)
+	if err != nil {
+		return fmt.Errorf("read intents: %v", err)
 	}
 
 	for _, intent := range intents {
-		if err = createIntent(importer.intentsClient, intent); err != nil {
+		if err = importer.createIntent(intent); err != nil {
 			return err
 		}
 	}
@@ -40,41 +44,14 @@ func (importer *fileIntentsImporter) ImportIntents() error {
 	return nil
 }
 
-type urlIntentsImporter struct {
-	intentsClient *IntentsClient
-	url           string
-}
-
-func NewURLIntentsImporter(intentsClient *IntentsClient, url string) IntentsImporter {
-	return &urlIntentsImporter{
-		intentsClient: intentsClient,
-		url:           url,
-	}
-}
-
-func (importer *urlIntentsImporter) ImportIntents() error {
-	intents, err := readIntentsFromURL(importer.url)
-	if err != nil {
-		return fmt.Errorf("read intents from url: %v", err)
-	}
-
-	for _, intent := range intents {
-		if err = createIntent(importer.intentsClient, intent); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createIntent(intentsClient *IntentsClient, intent Intent) error {
-	newIntent, err := intentsClient.CreateIntent(intent)
+func (importer *intentsImporter) createIntent(intent Intent) error {
+	newIntent, err := importer.intentsClient.CreateIntent(intent)
 	if err != nil {
 		return fmt.Errorf("create intent: %v", err)
 	}
 
 	for _, followupIntent := range intent.FollowupIntents {
-		if err := createFollowupIntent(intentsClient, followupIntent, newIntent); err != nil {
+		if err := importer.createFollowupIntent(followupIntent, newIntent); err != nil {
 			return err
 		}
 	}
@@ -82,15 +59,15 @@ func createIntent(intentsClient *IntentsClient, intent Intent) error {
 	return nil
 }
 
-func createFollowupIntent(intentsClient *IntentsClient, followupIntent Intent, parentFollowupIntent Intent) error {
-	parentFollowupIntent, err := intentsClient.CreateFollowupIntent(followupIntent, parentFollowupIntent)
+func (importer *intentsImporter) createFollowupIntent(followupIntent Intent, parentFollowupIntent Intent) error {
+	parentFollowupIntent, err := importer.intentsClient.CreateFollowupIntent(followupIntent, parentFollowupIntent)
 	if err != nil {
 		return fmt.Errorf("create followup intent: %v", err)
 	}
 
 	if len(followupIntent.FollowupIntents) > 0 {
 		for _, followupIntent := range followupIntent.FollowupIntents {
-			err := createFollowupIntent(intentsClient, followupIntent, parentFollowupIntent)
+			err := importer.createFollowupIntent(followupIntent, parentFollowupIntent)
 			if err != nil {
 				return err
 			}
@@ -100,44 +77,12 @@ func createFollowupIntent(intentsClient *IntentsClient, followupIntent Intent, p
 	return nil
 }
 
-func readIntentsFromFile(filename string) ([]Intent, error) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %v", err)
-	}
-
-	return readIntents(data)
-}
-
-func readIntentsFromURL(url string) ([]Intent, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("http get: %v", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); err == nil {
-			err = closeErr
-		}
-	}()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %v", err)
-	}
-
-	intents, err := readIntents(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return intents, err
-}
-
 type intentData struct {
-	Name      string       `json:"name"`
-	UserSays  []string     `json:"usersays"`
-	Responses []string     `json:"responses"`
-	FollowUp  []intentData `json:"followup"`
+	Name            string       `json:"name"`
+	UserSays        []string     `json:"usersays"`
+	Responses       []string     `json:"responses"`
+	FollowupIntents []intentData `json:"followup"`
+	IsFallback      bool         `json:"fallback"`
 }
 
 func readIntents(dat []byte) ([]Intent, error) {
@@ -145,8 +90,7 @@ func readIntents(dat []byte) ([]Intent, error) {
 		Intents []intentData `json:"intents"`
 	}
 
-	err := yaml.Unmarshal(dat, &data)
-	if err != nil {
+	if err := yaml.Unmarshal(dat, &data); err != nil {
 		return nil, fmt.Errorf("unmarshal data: %v", err)
 	}
 
@@ -155,38 +99,53 @@ func readIntents(dat []byte) ([]Intent, error) {
 		intents = append(intents, intentDataToIntent(intent))
 	}
 
-	return intents, err
+	return intents, nil
 }
 
 func intentDataToIntent(intentData intentData) Intent {
-	var intent Intent
-	intent.DisplayName = intentData.Name
+	var messages []Message
 	for _, val := range intentData.Responses {
-		intent.Messages = append(intent.Messages, Message{Text: val})
+		messages = append(messages, Message{Text: val})
 	}
-	parameters := make(map[string]bool)
+
+	var (
+		parameters      []Parameter
+		trainingPhrases []TrainingPhrase
+		params          = make(map[string]bool)
+	)
+
 	for _, val := range intentData.UserSays {
 		parts := parseTrainingPhrase(val)
-		intent.TrainingPhrases = append(intent.TrainingPhrases, TrainingPhrase{Parts: parts})
+		trainingPhrases = append(trainingPhrases, TrainingPhrase{Parts: parts})
 		for _, p := range parts {
 			if p.Alias == "" {
 				continue
 			}
-			if _, ok := parameters[p.Alias]; ok {
+			if _, ok := params[p.Alias]; ok {
 				continue
 			}
-			parameters[p.Alias] = true
-			intent.Parameters = append(intent.Parameters, Parameter{
+			params[p.Alias] = true
+			parameters = append(parameters, Parameter{
 				DisplayName:           p.Alias,
 				Value:                 fmt.Sprintf("$%s", p.Alias),
 				EntityTypeDisplayName: p.EntityType,
 			})
 		}
 	}
-	for _, val := range intentData.FollowUp {
-		intent.FollowupIntents = append(intent.FollowupIntents, intentDataToIntent(val))
+
+	var followupIntents []Intent
+	for _, val := range intentData.FollowupIntents {
+		followupIntents = append(followupIntents, intentDataToIntent(val))
 	}
-	return intent
+
+	return Intent{
+		DisplayName:     intentData.Name,
+		IsFallback:      intentData.IsFallback,
+		TrainingPhrases: trainingPhrases,
+		Messages:        messages,
+		Parameters:      parameters,
+		FollowupIntents: followupIntents,
+	}
 }
 
 var trainingPhraseRegexp = regexp.MustCompile(`@(\w+):(?:(\w+)|['"]([^'"]+)['"])`)

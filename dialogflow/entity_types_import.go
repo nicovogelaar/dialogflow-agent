@@ -3,7 +3,6 @@ package dialogflow
 import (
 	"fmt"
 	"io/ioutil"
-	"net/http"
 
 	"github.com/ghodss/yaml"
 )
@@ -12,100 +11,36 @@ type EntityTypesImporter interface {
 	ImportEntityTypes() error
 }
 
-type fileEntityTypesImporter struct {
+type entityTypesImporter struct {
 	entityTypesClient *EntityTypesClient
-	filename          string
+	source            Source
 }
 
-func NewFileEntityTypesImporter(entityTypesClient *EntityTypesClient, filename string) EntityTypesImporter {
-	return &fileEntityTypesImporter{
+func NewEntityTypesImporter(entityTypesClient *EntityTypesClient, source Source) EntityTypesImporter {
+	return &entityTypesImporter{
 		entityTypesClient: entityTypesClient,
-		filename:          filename,
+		source:            source,
 	}
 }
 
-func (importer *fileEntityTypesImporter) ImportEntityTypes() error {
-	entityTypes, err := readEntityTypesFromFile(importer.filename)
+func (importer *entityTypesImporter) ImportEntityTypes() error {
+	data, err := ioutil.ReadAll(importer.source)
 	if err != nil {
-		return fmt.Errorf("read entity types from file: %v", err)
-	}
-
-	for _, entityType := range entityTypes {
-		if err = createEntityType(importer.entityTypesClient, entityType); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-type urlEntityTypesImporter struct {
-	entityTypesClient *EntityTypesClient
-	url               string
-}
-
-func NewURLEntityTypesImporter(entityTypesClient *EntityTypesClient, url string) EntityTypesImporter {
-	return &urlEntityTypesImporter{
-		entityTypesClient: entityTypesClient,
-		url:               url,
-	}
-}
-
-func (importer *urlEntityTypesImporter) ImportEntityTypes() error {
-	entityTypes, err := readEntityTypesFromURL(importer.url)
-	if err != nil {
-		return fmt.Errorf("read entity types from url: %v", err)
-	}
-
-	for _, entityType := range entityTypes {
-		if err = createEntityType(importer.entityTypesClient, entityType); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createEntityType(entityTypesClient *EntityTypesClient, entityType EntityType) error {
-	_, err := entityTypesClient.CreateEntityType(entityType)
-	if err != nil {
-		return fmt.Errorf("create entity type: %v", err)
-	}
-
-	return nil
-}
-
-func readEntityTypesFromFile(filename string) ([]EntityType, error) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %v", err)
-	}
-
-	return readEntityTypes(data)
-}
-
-func readEntityTypesFromURL(url string) ([]EntityType, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("http get: %v", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); err == nil {
-			err = closeErr
-		}
-	}()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %v", err)
+		return fmt.Errorf("failed to read data: %v", err)
 	}
 
 	entityTypes, err := readEntityTypes(data)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("read entity types: %v", err)
 	}
 
-	return entityTypes, err
+	for _, entityType := range entityTypes {
+		if _, err := importer.entityTypesClient.CreateEntityType(entityType); err != nil {
+			return fmt.Errorf("create entity type: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func readEntityTypes(dat []byte) ([]EntityType, error) {
@@ -116,8 +51,7 @@ func readEntityTypes(dat []byte) ([]EntityType, error) {
 		} `json:"entities"`
 	}
 
-	err := yaml.Unmarshal(dat, &data)
-	if err != nil {
+	if err := yaml.Unmarshal(dat, &data); err != nil {
 		return nil, fmt.Errorf("unmarshal data: %v", err)
 	}
 

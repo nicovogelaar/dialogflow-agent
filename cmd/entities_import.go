@@ -24,14 +24,15 @@ var (
 				}
 			}()
 
-			var entityTypesImporter dialogflow.EntityTypesImporter
-			if entitiesImportURL != "" {
-				entityTypesImporter = dialogflow.NewURLEntityTypesImporter(entityTypesClient, entitiesImportURL)
+			var source dialogflow.Source
+			if intentsImportURL != "" {
+				source = dialogflow.NewURLSource(entitiesImportURL)
 			} else {
-				entityTypesImporter = dialogflow.NewFileEntityTypesImporter(entityTypesClient, entitiesImportFilename)
+				source = dialogflow.NewFileSource(entitiesImportFilename)
 			}
 
-			if err = entityTypesImporter.ImportEntityTypes(); err != nil {
+			importer := dialogflow.NewEntityTypesImporter(entityTypesClient, source)
+			if err = importer.ImportEntityTypes(); err != nil {
 				log.Fatal(err)
 			}
 		},
